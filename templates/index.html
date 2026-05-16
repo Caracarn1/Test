@@ -70,10 +70,7 @@
         #controls button:hover  { background: #2a2a4e; }
         #controls button.active { background: #3a6fd8; border-color: #5a8ff8; }
         #speed-label { color: #aaa; font-size: 12px; }
-        #speed-slider {
-            width: 100px;
-            accent-color: #3a6fd8;
-        }
+        #speed-slider { width: 100px; accent-color: #3a6fd8; }
 
         /* ── Planet labels ── */
         #label-container {
@@ -92,6 +89,47 @@
             transform: translate(-50%, -160%);
             white-space: nowrap;
         }
+
+        /* ── Planet popup ── */
+        #popup {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #0d1b2a, #1b2a3b);
+            border: 1px solid #3a6fd8;
+            border-radius: 14px;
+            padding: 22px 26px;
+            color: #fff;
+            width: 280px;
+            box-shadow: 0 0 30px rgba(58,111,216,0.4);
+            z-index: 100;
+        }
+        #popup h2 {
+            font-size: 20px;
+            margin-bottom: 14px;
+            color: #ffd700;
+            border-bottom: 1px solid #2a3a4e;
+            padding-bottom: 8px;
+        }
+        #popup table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        #popup td { padding: 5px 4px; }
+        #popup td:first-child { color: #aaa; width: 55%; }
+        #popup td:last-child  { color: #fff; font-weight: bold; }
+        #popup-close {
+            position: absolute;
+            top: 10px; right: 14px;
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 20px;
+            cursor: pointer;
+            line-height: 1;
+        }
+        #popup-close:hover { color: #fff; }
+        #popup-hint { font-size: 11px; color: #aaa; margin-top: 4px; }
+        #info p.click-hint { margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -99,10 +137,17 @@
 <div id="info">
     <h1>Solar System — Scale Model</h1>
     <p>Scroll to zoom &nbsp;•&nbsp; Drag to rotate &nbsp;•&nbsp; Right-drag to pan</p>
+    <p class="click-hint" style="color:#ffd700;font-size:11px;margin-top:4px;">Click any planet for facts</p>
 </div>
 
 <div id="legend"></div>
 <div id="label-container"></div>
+
+<div id="popup">
+    <button id="popup-close" onclick="closePopup()">&#x2715;</button>
+    <h2 id="popup-title"></h2>
+    <table id="popup-table"></table>
+</div>
 
 <div id="controls">
     <button id="btn-random" class="active" onclick="setRandomStart()">Random Start</button>
@@ -125,11 +170,11 @@ renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.05;
-controls.minDistance   = 5;
-controls.maxDistance   = 2000;
+const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+orbitControls.enableDamping = true;
+orbitControls.dampingFactor = 0.05;
+orbitControls.minDistance   = 5;
+orbitControls.maxDistance   = 2000;
 
 // ── Stars ─────────────────────────────────────────────────────────────────────
 (function() {
@@ -145,8 +190,7 @@ controls.maxDistance   = 2000;
 scene.add(new THREE.PointLight(0xffffff, 2.5, 2000));
 scene.add(new THREE.AmbientLight(0x222222));
 
-// ── Orbital elements at J2000 (mean longitude L0°, daily rate °/day) ──────────
-// Source: JPL planetary fact sheets / Meeus "Astronomical Algorithms"
+// ── Orbital elements at J2000 ─────────────────────────────────────────────────
 const ELEMENTS = {
     Mercury: { L0: 252.25084, rate: 4.09233445 },
     Venus:   { L0: 181.97973, rate: 1.60213034 },
@@ -169,6 +213,18 @@ function planetAngle(name, j2000Days) {
     return THREE.MathUtils.degToRad(((el.L0 + el.rate * j2000Days) % 360 + 360) % 360);
 }
 
+// ── Planet facts ──────────────────────────────────────────────────────────────
+const FACTS = {
+    Mercury: { 'Diameter':'4,879 km', 'Distance from Sun':'57.9M km', 'Moons':'0', 'Day length':'59 Earth days', 'Year length':'88 Earth days', 'Temp (day)':'430°C', 'Temp (night)':'−180°C' },
+    Venus:   { 'Diameter':'12,104 km', 'Distance from Sun':'108.2M km', 'Moons':'0', 'Day length':'243 Earth days', 'Year length':'225 Earth days', 'Temp (avg)':'465°C', 'Atmosphere':'96% CO₂' },
+    Earth:   { 'Diameter':'12,742 km', 'Distance from Sun':'149.6M km', 'Moons':'1', 'Day length':'24 hours', 'Year length':'365.25 days', 'Temp (avg)':'15°C', 'Atmosphere':'78% N₂, 21% O₂' },
+    Mars:    { 'Diameter':'6,779 km', 'Distance from Sun':'227.9M km', 'Moons':'2', 'Day length':'24.6 hours', 'Year length':'687 Earth days', 'Temp (avg)':'−65°C', 'Atmosphere':'95% CO₂' },
+    Jupiter: { 'Diameter':'139,820 km', 'Distance from Sun':'778.5M km', 'Moons':'95', 'Day length':'9.9 hours', 'Year length':'11.86 Earth years', 'Mass':'318 × Earth', 'Type':'Gas Giant' },
+    Saturn:  { 'Diameter':'116,460 km', 'Distance from Sun':'1.43B km', 'Moons':'146', 'Day length':'10.7 hours', 'Year length':'29.46 Earth years', 'Ring width':'282,000 km', 'Type':'Gas Giant' },
+    Uranus:  { 'Diameter':'50,724 km', 'Distance from Sun':'2.87B km', 'Moons':'28', 'Day length':'17.2 hours', 'Year length':'84 Earth years', 'Temp (avg)':'−195°C', 'Type':'Ice Giant' },
+    Neptune: { 'Diameter':'49,244 km', 'Distance from Sun':'4.50B km', 'Moons':'16', 'Day length':'16.1 hours', 'Year length':'164.8 Earth years', 'Wind speed':'2,100 km/h', 'Type':'Ice Giant' },
+};
+
 // ── Planet definitions ────────────────────────────────────────────────────────
 const AU = 18;
 const PLANETS = [
@@ -185,18 +241,20 @@ const PLANETS = [
 // ── Sun ───────────────────────────────────────────────────────────────────────
 const sun = new THREE.Mesh(
     new THREE.SphereGeometry(4, 64, 64),
-    new THREE.MeshBasicMaterial({ color: 0xFDB813 })
+    new THREE.MeshBasicMaterial({ color:0xFDB813 })
 );
 scene.add(sun);
 scene.add(new THREE.Mesh(
-    new THREE.SphereGeometry(5.2, 32, 32),
+    new THREE.SphereGeometry(5.5, 32, 32),
     new THREE.MeshBasicMaterial({ color:0xff8800, transparent:true, opacity:0.12 })
 ));
 
-// ── Build planet objects ──────────────────────────────────────────────────────
-const legendEl      = document.getElementById('legend');
-const labelContainer= document.getElementById('label-container');
-const planetObjects = [];
+// ── Build planets ─────────────────────────────────────────────────────────────
+const legendEl       = document.getElementById('legend');
+const labelContainer = document.getElementById('label-container');
+const planetObjects  = [];
+const clickableMeshes = [];  // for raycasting
+let earthMesh = null;
 
 PLANETS.forEach(p => {
     // Orbit ring
@@ -207,7 +265,6 @@ PLANETS.forEach(p => {
     orbit.rotation.x = Math.PI / 2;
     scene.add(orbit);
 
-    // Pivot → planet sits at (dist, 0, 0), rotated by pivot.rotation.y
     const pivot = new THREE.Object3D();
     scene.add(pivot);
 
@@ -215,11 +272,14 @@ PLANETS.forEach(p => {
         new THREE.SphereGeometry(p.radius, 48, 48),
         new THREE.MeshLambertMaterial({ color: p.color })
     );
-    mesh.position.x   = p.dist;
-    mesh.rotation.z   = THREE.MathUtils.degToRad(p.tilt);
+    mesh.position.x = p.dist;
+    mesh.rotation.z = THREE.MathUtils.degToRad(p.tilt);
+    mesh.userData   = { planetName: p.name };
     pivot.add(mesh);
+    clickableMeshes.push(mesh);
 
-    // Saturn rings
+    if (p.name === 'Earth') earthMesh = mesh;
+
     if (p.rings) {
         const ring = new THREE.Mesh(
             new THREE.RingGeometry(p.radius*1.5, p.radius*2.4, 80),
@@ -229,35 +289,95 @@ PLANETS.forEach(p => {
         mesh.add(ring);
     }
 
-    // Label
     const label = document.createElement('div');
     label.className   = 'planet-label';
     label.textContent = p.name;
     labelContainer.appendChild(label);
 
-    // Legend
     const hex = '#' + p.color.toString(16).padStart(6,'0');
     legendEl.innerHTML += `<div><span style="background:${hex}"></span>${p.name}</div>`;
 
     planetObjects.push({ pivot, mesh, label, name: p.name });
 });
 
-// ── Simulation time (days since J2000) ────────────────────────────────────────
-let simTime = 0;   // starts at J2000 epoch by default
+// ── Moon ──────────────────────────────────────────────────────────────────────
+const moonPivot = new THREE.Object3D();
+earthMesh.add(moonPivot);
+
+const moonMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 32, 32),
+    new THREE.MeshLambertMaterial({ color: 0xaaaaaa })
+);
+moonMesh.position.x  = 1.4;   // ~60 Earth radii, compressed for visibility
+moonMesh.userData    = { planetName: 'Moon' };
+moonPivot.add(moonMesh);
+clickableMeshes.push(moonMesh);
+
+FACTS['Moon'] = {
+    'Diameter':'3,474 km',
+    'Distance from Earth':'384,400 km',
+    'Orbital period':'27.3 days',
+    'Day length':'27.3 Earth days',
+    'Temp (day)':'127°C',
+    'Temp (night)':'−173°C',
+    'Surface':'Craters, maria, highlands',
+};
+
+const moonLabel = document.createElement('div');
+moonLabel.className   = 'planet-label';
+moonLabel.textContent = 'Moon';
+labelContainer.appendChild(moonLabel);
+
+const MOON_RATE = 360 / 27.32;   // degrees per day
+
+// ── Asteroid Belt ─────────────────────────────────────────────────────────────
+(function buildAsteroidBelt() {
+    const innerR = 2.2 * AU;
+    const outerR = 3.2 * AU;
+    const count  = 3000;
+    const positions = [];
+
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const r     = innerR + Math.random() * (outerR - innerR);
+        const y     = (Math.random() - 0.5) * 3;   // slight vertical scatter
+        positions.push(Math.cos(angle) * r, y, Math.sin(angle) * r);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({ color:0x888888, size:0.25, transparent:true, opacity:0.7 });
+    scene.add(new THREE.Points(geo, mat));
+
+    // Belt label
+    const beltLabel = document.createElement('div');
+    beltLabel.className   = 'planet-label';
+    beltLabel.textContent = 'Asteroid Belt';
+    beltLabel.style.color = '#aaa';
+    beltLabel.style.fontSize = '10px';
+    labelContainer.appendChild(beltLabel);
+
+    // Project belt label at midpoint of belt on x-axis
+    const beltLabelMesh = new THREE.Object3D();
+    beltLabelMesh.position.set((innerR + outerR) / 2, 0, 0);
+    scene.add(beltLabelMesh);
+    window._beltLabelMesh = beltLabelMesh;
+    window._beltLabel     = beltLabel;
+})();
+
+// ── Simulation time ───────────────────────────────────────────────────────────
+let simTime = 0;
 
 function setRandomStart() {
-    simTime = Math.random() * 365 * 50;   // random point in 50-year window
+    simTime = Math.random() * 365 * 50;
     document.getElementById('btn-random').classList.add('active');
     document.getElementById('btn-today').classList.remove('active');
 }
-
 function setTodayStart() {
     simTime = dateToJ2000(new Date());
     document.getElementById('btn-today').classList.add('active');
     document.getElementById('btn-random').classList.remove('active');
 }
-
-// Default: random start
 setRandomStart();
 
 // ── Speed control ─────────────────────────────────────────────────────────────
@@ -271,10 +391,48 @@ speedSlider.addEventListener('input', () => {
 const dateDisplay = document.getElementById('date-display');
 const DATE_OPTS   = { year:'numeric', month:'short', day:'numeric' };
 
+// ── Popup ─────────────────────────────────────────────────────────────────────
+function showPopup(name) {
+    const facts = FACTS[name];
+    if (!facts) return;
+    document.getElementById('popup-title').textContent = name;
+    const rows = Object.entries(facts)
+        .map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`)
+        .join('');
+    document.getElementById('popup-table').innerHTML = rows;
+    document.getElementById('popup').style.display = 'block';
+}
+function closePopup() {
+    document.getElementById('popup').style.display = 'none';
+}
+
+// ── Raycaster for clicks ──────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse     = new THREE.Vector2();
+let mouseDownPos = { x: 0, y: 0 };
+
+renderer.domElement.addEventListener('mousedown', e => {
+    mouseDownPos = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('mouseup', e => {
+    const dx = e.clientX - mouseDownPos.x;
+    const dy = e.clientY - mouseDownPos.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 5) return;   // was a drag, not a click
+
+    mouse.x = (e.clientX / innerWidth)  * 2 - 1;
+    mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const hits = raycaster.intersectObjects(clickableMeshes);
+    if (hits.length > 0) {
+        showPopup(hits[0].object.userData.planetName);
+    }
+});
+
 // ── Label projection ──────────────────────────────────────────────────────────
 const _v = new THREE.Vector3();
-function projectLabel(mesh, label) {
-    _v.setFromMatrixPosition(mesh.matrixWorld);
+function projectLabel(obj3d, label) {
+    _v.setFromMatrixPosition(obj3d.matrixWorld);
     _v.project(camera);
     const x = ( _v.x * 0.5 + 0.5) * innerWidth;
     const y = (-_v.y * 0.5 + 0.5) * innerHeight;
@@ -285,34 +443,41 @@ function projectLabel(mesh, label) {
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 camera.position.set(0, 120, 260);
-controls.update();
+orbitControls.update();
 
-// ── Animation loop ────────────────────────────────────────────────────────────
+// ── Animation ─────────────────────────────────────────────────────────────────
 let lastTime = performance.now();
 
 function animate() {
     requestAnimationFrame(animate);
 
-    const now     = performance.now();
-    const deltaSec= (now - lastTime) / 1000;
-    lastTime      = now;
+    const now      = performance.now();
+    const deltaSec = (now - lastTime) / 1000;
+    lastTime = now;
 
-    const daysPerSec = parseFloat(speedSlider.value);
-    simTime += daysPerSec * deltaSec;
+    simTime += parseFloat(speedSlider.value) * deltaSec;
 
-    // Update planet positions from orbital elements
+    // Update planets
     planetObjects.forEach(p => {
         p.pivot.rotation.y = planetAngle(p.name, simTime);
         p.mesh.rotation.y += 0.01;
         projectLabel(p.mesh, p.label);
     });
 
-    // Update date display
-    const simDate = j2000ToDate(simTime);
-    dateDisplay.textContent = simDate.toLocaleDateString('en-GB', DATE_OPTS);
+    // Update Moon
+    const moonAngleDeg = ((ELEMENTS.Earth.L0 + MOON_RATE * simTime) % 360 + 360) % 360;
+    moonPivot.rotation.y = THREE.MathUtils.degToRad(moonAngleDeg);
+    projectLabel(moonMesh, moonLabel);
+
+    // Belt label
+    if (window._beltLabelMesh && window._beltLabel)
+        projectLabel(window._beltLabelMesh, window._beltLabel);
+
+    // Date
+    dateDisplay.textContent = j2000ToDate(simTime).toLocaleDateString('en-GB', DATE_OPTS);
 
     sun.rotation.y += 0.001;
-    controls.update();
+    orbitControls.update();
     renderer.render(scene, camera);
 }
 animate();
