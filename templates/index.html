@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar System Scale Model</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+
+        #info {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: #fff;
+            pointer-events: none;
+        }
+        #info h1 { font-size: 18px; margin-bottom: 4px; }
+        #info p  { font-size: 12px; color: #aaa; }
+
+        #legend {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: #fff;
+            font-size: 12px;
+            line-height: 1.8;
+            pointer-events: none;
+        }
+        #legend span {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        #label-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        .planet-label {
+            position: absolute;
+            color: #fff;
+            font-size: 11px;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 5px;
+            border-radius: 3px;
+            transform: translate(-50%, -150%);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+<div id="info">
+    <h1>Solar System — Scale Model</h1>
+    <p>Scroll to zoom &nbsp;•&nbsp; Drag to rotate &nbsp;•&nbsp; Right-drag to pan</p>
+</div>
+<div id="legend"></div>
+<div id="label-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ── Scene setup ──────────────────────────────────────────────────────────────
+const scene    = new THREE.Scene();
+const camera   = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 50000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.05;
+controls.minDistance    = 5;
+controls.maxDistance    = 2000;
+
+// ── Starfield ────────────────────────────────────────────────────────────────
+(function addStars() {
+    const pos = [];
+    for (let i = 0; i < 12000; i++) {
+        pos.push((Math.random() - 0.5) * 8000,
+                 (Math.random() - 0.5) * 8000,
+                 (Math.random() - 0.5) * 8000);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7 })));
+})();
+
+// ── Lighting ─────────────────────────────────────────────────────────────────
+scene.add(new THREE.PointLight(0xffffff, 2.5, 2000));
+scene.add(new THREE.AmbientLight(0x222222));
+
+// ── Planet data ───────────────────────────────────────────────────────────────
+// Distances: real AU values, scaled × 18 for display
+// Sizes: real relative radii (Earth = 1), boosted so inner planets are visible
+// Orbital periods: relative (Earth = 1 year)
+const AU = 18;
+const planets = [
+    { name:'Mercury', radius:0.20, dist:0.387*AU, color:0x9e9e9e, period:0.241, tilt:0.03 },
+    { name:'Venus',   radius:0.47, dist:0.723*AU, color:0xe8cda0, period:0.615, tilt:177.4 },
+    { name:'Earth',   radius:0.50, dist:1.000*AU, color:0x2b6cb0, period:1.000, tilt:23.4  },
+    { name:'Mars',    radius:0.27, dist:1.524*AU, color:0xc1440e, period:1.881, tilt:25.2  },
+    { name:'Jupiter', radius:1.80, dist:5.203*AU, color:0xc88b3a, period:11.86, tilt:3.1   },
+    { name:'Saturn',  radius:1.52, dist:9.537*AU, color:0xe4d191, period:29.46, tilt:26.7, rings:true },
+    { name:'Uranus',  radius:0.90, dist:19.19*AU, color:0x7de8e8, period:84.01, tilt:97.8  },
+    { name:'Neptune', radius:0.85, dist:30.07*AU, color:0x3f54ba, period:164.8, tilt:28.3  },
+];
+
+// ── Sun ───────────────────────────────────────────────────────────────────────
+const sunGeo  = new THREE.SphereGeometry(4, 64, 64);
+const sunMat  = new THREE.MeshBasicMaterial({ color: 0xFDB813 });
+const sun     = new THREE.Mesh(sunGeo, sunMat);
+scene.add(sun);
+
+// Soft glow
+const glowGeo = new THREE.SphereGeometry(5.2, 32, 32);
+const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.12 });
+scene.add(new THREE.Mesh(glowGeo, glowMat));
+
+// ── Build planets ─────────────────────────────────────────────────────────────
+const legendEl = document.getElementById('legend');
+const labelContainer = document.getElementById('label-container');
+
+const planetObjects = planets.map(p => {
+    // Orbit ring
+    const orbitGeo = new THREE.RingGeometry(p.dist - 0.08, p.dist + 0.08, 180);
+    const orbitMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
+    const orbit    = new THREE.Mesh(orbitGeo, orbitMat);
+    orbit.rotation.x = Math.PI / 2;
+    scene.add(orbit);
+
+    // Planet pivot (so we rotate the planet around the sun)
+    const pivot = new THREE.Object3D();
+    scene.add(pivot);
+
+    // Planet sphere
+    const geo  = new THREE.SphereGeometry(p.radius, 48, 48);
+    const mat  = new THREE.MeshLambertMaterial({ color: p.color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.x = p.dist;
+    mesh.rotation.z = THREE.MathUtils.degToRad(p.tilt);
+    pivot.add(mesh);
+
+    // Saturn rings
+    if (p.rings) {
+        const ringGeo = new THREE.RingGeometry(p.radius * 1.5, p.radius * 2.4, 80);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xd4b483, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
+        const ring    = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2.4;
+        mesh.add(ring);
+    }
+
+    // Label
+    const label = document.createElement('div');
+    label.className   = 'planet-label';
+    label.textContent = p.name;
+    labelContainer.appendChild(label);
+
+    // Legend entry
+    const hex    = '#' + p.color.toString(16).padStart(6, '0');
+    legendEl.innerHTML += `<div><span style="background:${hex}"></span>${p.name}</div>`;
+
+    return { pivot, mesh, label, period: p.period, angle: Math.random() * Math.PI * 2 };
+});
+
+// ── Camera start ──────────────────────────────────────────────────────────────
+camera.position.set(0, 120, 260);
+controls.update();
+
+// ── Label projection helper ───────────────────────────────────────────────────
+const _v  = new THREE.Vector3();
+function projectLabel(mesh, label) {
+    _v.setFromMatrixPosition(mesh.matrixWorld);
+    _v.project(camera);
+    const x = ( _v.x * 0.5 + 0.5) * innerWidth;
+    const y = (-_v.y * 0.5 + 0.5) * innerHeight;
+    label.style.left = x + 'px';
+    label.style.top  = y + 'px';
+    label.style.display = (_v.z < 1) ? 'block' : 'none';
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+const SPEED = 0.008; // adjust to taste — higher = faster orbits
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    planetObjects.forEach(p => {
+        // Angular speed inversely proportional to orbital period (Kepler)
+        p.angle += SPEED / p.period;
+        p.pivot.rotation.y = p.angle;
+        p.mesh.rotation.y += 0.01;
+        projectLabel(p.mesh, p.label);
+    });
+
+    sun.rotation.y += 0.001;
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
