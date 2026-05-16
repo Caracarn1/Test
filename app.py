@@ -10,8 +10,8 @@ def home():
     <body style="text-align:center; font-family:Arial;">
         <h1>Hello from Render!</h1>
         <p>My Python webpage is working.</p>
-        <img src="https://photojournal.jpl.nasa.gov/jpeg/PIA18033.jpg"
-             alt="Earth from NASA"
+        <img src="https://upload.wikimedia.org/wikipedia/commons/9/97/Montage_of_Our_Solar_System.jpg"
+             alt="Solar System Montage from NASA"
              style="width:80%; max-width:800px; margin-top:20px;">
         <p><small>Image credit: NASA/JPL</small></p>
     </body>
