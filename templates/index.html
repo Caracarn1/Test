@@ -10,8 +10,7 @@
 
         #info {
             position: absolute;
-            top: 15px;
-            left: 15px;
+            top: 15px; left: 15px;
             color: #fff;
             pointer-events: none;
         }
@@ -20,22 +19,63 @@
 
         #legend {
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 15px; right: 15px;
             color: #fff;
             font-size: 12px;
-            line-height: 1.8;
+            line-height: 2;
             pointer-events: none;
         }
         #legend span {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             margin-right: 6px;
             vertical-align: middle;
         }
 
+        /* ── Controls bar ── */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(0,0,0,0.65);
+            border: 1px solid #444;
+            border-radius: 12px;
+            padding: 10px 20px;
+            color: #fff;
+            font-size: 13px;
+            user-select: none;
+        }
+        #date-display {
+            font-size: 15px;
+            font-weight: bold;
+            min-width: 130px;
+            text-align: center;
+            color: #ffd700;
+        }
+        #controls button {
+            background: #1a1a2e;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        #controls button:hover  { background: #2a2a4e; }
+        #controls button.active { background: #3a6fd8; border-color: #5a8ff8; }
+        #speed-label { color: #aaa; font-size: 12px; }
+        #speed-slider {
+            width: 100px;
+            accent-color: #3a6fd8;
+        }
+
+        /* ── Planet labels ── */
         #label-container {
             position: absolute;
             top: 0; left: 0;
@@ -46,26 +86,38 @@
             position: absolute;
             color: #fff;
             font-size: 11px;
-            background: rgba(0,0,0,0.5);
-            padding: 2px 5px;
+            background: rgba(0,0,0,0.55);
+            padding: 2px 6px;
             border-radius: 3px;
-            transform: translate(-50%, -150%);
+            transform: translate(-50%, -160%);
             white-space: nowrap;
         }
     </style>
 </head>
 <body>
+
 <div id="info">
     <h1>Solar System — Scale Model</h1>
     <p>Scroll to zoom &nbsp;•&nbsp; Drag to rotate &nbsp;•&nbsp; Right-drag to pan</p>
 </div>
+
 <div id="legend"></div>
 <div id="label-container"></div>
+
+<div id="controls">
+    <button id="btn-random" class="active" onclick="setRandomStart()">Random Start</button>
+    <button id="btn-today"  onclick="setTodayStart()">Today's Positions</button>
+    <div id="date-display">—</div>
+    <span id="speed-label">Speed:</span>
+    <input id="speed-slider" type="range" min="1" max="200" value="30">
+    <span id="speed-val">30 days/s</span>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-// ── Scene setup ──────────────────────────────────────────────────────────────
+
+// ── Scene ─────────────────────────────────────────────────────────────────────
 const scene    = new THREE.Scene();
 const camera   = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 50000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -74,84 +126,105 @@ renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping  = true;
-controls.dampingFactor  = 0.05;
-controls.minDistance    = 5;
-controls.maxDistance    = 2000;
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance   = 5;
+controls.maxDistance   = 2000;
 
-// ── Starfield ────────────────────────────────────────────────────────────────
-(function addStars() {
+// ── Stars ─────────────────────────────────────────────────────────────────────
+(function() {
     const pos = [];
-    for (let i = 0; i < 12000; i++) {
-        pos.push((Math.random() - 0.5) * 8000,
-                 (Math.random() - 0.5) * 8000,
-                 (Math.random() - 0.5) * 8000);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.7 })));
+    for (let i = 0; i < 12000; i++)
+        pos.push((Math.random()-.5)*8000, (Math.random()-.5)*8000, (Math.random()-.5)*8000);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color:0xffffff, size:0.7 })));
 })();
 
-// ── Lighting ─────────────────────────────────────────────────────────────────
+// ── Lights ────────────────────────────────────────────────────────────────────
 scene.add(new THREE.PointLight(0xffffff, 2.5, 2000));
 scene.add(new THREE.AmbientLight(0x222222));
 
-// ── Planet data ───────────────────────────────────────────────────────────────
-// Distances: real AU values, scaled × 18 for display
-// Sizes: real relative radii (Earth = 1), boosted so inner planets are visible
-// Orbital periods: relative (Earth = 1 year)
+// ── Orbital elements at J2000 (mean longitude L0°, daily rate °/day) ──────────
+// Source: JPL planetary fact sheets / Meeus "Astronomical Algorithms"
+const ELEMENTS = {
+    Mercury: { L0: 252.25084, rate: 4.09233445 },
+    Venus:   { L0: 181.97973, rate: 1.60213034 },
+    Earth:   { L0: 100.46457, rate: 0.98560028 },
+    Mars:    { L0: 355.45332, rate: 0.52402068 },
+    Jupiter: { L0:  34.40438, rate: 0.08308529 },
+    Saturn:  { L0:  49.94432, rate: 0.03346316 },
+    Uranus:  { L0: 313.23218, rate: 0.01172834 },
+    Neptune: { L0: 304.88003, rate: 0.00598103 },
+};
+
+function dateToJ2000(date) {
+    return (date - new Date('2000-01-01T12:00:00Z')) / 86400000;
+}
+function j2000ToDate(days) {
+    return new Date(new Date('2000-01-01T12:00:00Z').getTime() + days * 86400000);
+}
+function planetAngle(name, j2000Days) {
+    const el = ELEMENTS[name];
+    return THREE.MathUtils.degToRad(((el.L0 + el.rate * j2000Days) % 360 + 360) % 360);
+}
+
+// ── Planet definitions ────────────────────────────────────────────────────────
 const AU = 18;
-const planets = [
-    { name:'Mercury', radius:0.20, dist:0.387*AU, color:0x9e9e9e, period:0.241, tilt:0.03 },
-    { name:'Venus',   radius:0.47, dist:0.723*AU, color:0xe8cda0, period:0.615, tilt:177.4 },
-    { name:'Earth',   radius:0.50, dist:1.000*AU, color:0x2b6cb0, period:1.000, tilt:23.4  },
-    { name:'Mars',    radius:0.27, dist:1.524*AU, color:0xc1440e, period:1.881, tilt:25.2  },
-    { name:'Jupiter', radius:1.80, dist:5.203*AU, color:0xc88b3a, period:11.86, tilt:3.1   },
-    { name:'Saturn',  radius:1.52, dist:9.537*AU, color:0xe4d191, period:29.46, tilt:26.7, rings:true },
-    { name:'Uranus',  radius:0.90, dist:19.19*AU, color:0x7de8e8, period:84.01, tilt:97.8  },
-    { name:'Neptune', radius:0.85, dist:30.07*AU, color:0x3f54ba, period:164.8, tilt:28.3  },
+const PLANETS = [
+    { name:'Mercury', radius:0.20, dist:0.387*AU, color:0x9e9e9e, tilt:0.03  },
+    { name:'Venus',   radius:0.47, dist:0.723*AU, color:0xe8cda0, tilt:177.4 },
+    { name:'Earth',   radius:0.50, dist:1.000*AU, color:0x2b6cb0, tilt:23.4  },
+    { name:'Mars',    radius:0.27, dist:1.524*AU, color:0xc1440e, tilt:25.2  },
+    { name:'Jupiter', radius:1.80, dist:5.203*AU, color:0xc88b3a, tilt:3.1   },
+    { name:'Saturn',  radius:1.52, dist:9.537*AU, color:0xe4d191, tilt:26.7, rings:true },
+    { name:'Uranus',  radius:0.90, dist:19.19*AU, color:0x7de8e8, tilt:97.8  },
+    { name:'Neptune', radius:0.85, dist:30.07*AU, color:0x3f54ba, tilt:28.3  },
 ];
 
 // ── Sun ───────────────────────────────────────────────────────────────────────
-const sunGeo  = new THREE.SphereGeometry(4, 64, 64);
-const sunMat  = new THREE.MeshBasicMaterial({ color: 0xFDB813 });
-const sun     = new THREE.Mesh(sunGeo, sunMat);
+const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(4, 64, 64),
+    new THREE.MeshBasicMaterial({ color: 0xFDB813 })
+);
 scene.add(sun);
+scene.add(new THREE.Mesh(
+    new THREE.SphereGeometry(5.2, 32, 32),
+    new THREE.MeshBasicMaterial({ color:0xff8800, transparent:true, opacity:0.12 })
+));
 
-// Soft glow
-const glowGeo = new THREE.SphereGeometry(5.2, 32, 32);
-const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.12 });
-scene.add(new THREE.Mesh(glowGeo, glowMat));
+// ── Build planet objects ──────────────────────────────────────────────────────
+const legendEl      = document.getElementById('legend');
+const labelContainer= document.getElementById('label-container');
+const planetObjects = [];
 
-// ── Build planets ─────────────────────────────────────────────────────────────
-const legendEl = document.getElementById('legend');
-const labelContainer = document.getElementById('label-container');
-
-const planetObjects = planets.map(p => {
+PLANETS.forEach(p => {
     // Orbit ring
-    const orbitGeo = new THREE.RingGeometry(p.dist - 0.08, p.dist + 0.08, 180);
-    const orbitMat = new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide });
-    const orbit    = new THREE.Mesh(orbitGeo, orbitMat);
+    const orbit = new THREE.Mesh(
+        new THREE.RingGeometry(p.dist - 0.08, p.dist + 0.08, 180),
+        new THREE.MeshBasicMaterial({ color:0x333333, side:THREE.DoubleSide })
+    );
     orbit.rotation.x = Math.PI / 2;
     scene.add(orbit);
 
-    // Planet pivot (so we rotate the planet around the sun)
+    // Pivot → planet sits at (dist, 0, 0), rotated by pivot.rotation.y
     const pivot = new THREE.Object3D();
     scene.add(pivot);
 
-    // Planet sphere
-    const geo  = new THREE.SphereGeometry(p.radius, 48, 48);
-    const mat  = new THREE.MeshLambertMaterial({ color: p.color });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.x = p.dist;
-    mesh.rotation.z = THREE.MathUtils.degToRad(p.tilt);
+    const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(p.radius, 48, 48),
+        new THREE.MeshLambertMaterial({ color: p.color })
+    );
+    mesh.position.x   = p.dist;
+    mesh.rotation.z   = THREE.MathUtils.degToRad(p.tilt);
     pivot.add(mesh);
 
     // Saturn rings
     if (p.rings) {
-        const ringGeo = new THREE.RingGeometry(p.radius * 1.5, p.radius * 2.4, 80);
-        const ringMat = new THREE.MeshBasicMaterial({ color: 0xd4b483, side: THREE.DoubleSide, transparent: true, opacity: 0.75 });
-        const ring    = new THREE.Mesh(ringGeo, ringMat);
+        const ring = new THREE.Mesh(
+            new THREE.RingGeometry(p.radius*1.5, p.radius*2.4, 80),
+            new THREE.MeshBasicMaterial({ color:0xd4b483, side:THREE.DoubleSide, transparent:true, opacity:0.75 })
+        );
         ring.rotation.x = Math.PI / 2.4;
         mesh.add(ring);
     }
@@ -162,42 +235,81 @@ const planetObjects = planets.map(p => {
     label.textContent = p.name;
     labelContainer.appendChild(label);
 
-    // Legend entry
-    const hex    = '#' + p.color.toString(16).padStart(6, '0');
+    // Legend
+    const hex = '#' + p.color.toString(16).padStart(6,'0');
     legendEl.innerHTML += `<div><span style="background:${hex}"></span>${p.name}</div>`;
 
-    return { pivot, mesh, label, period: p.period, angle: Math.random() * Math.PI * 2 };
+    planetObjects.push({ pivot, mesh, label, name: p.name });
 });
 
-// ── Camera start ──────────────────────────────────────────────────────────────
-camera.position.set(0, 120, 260);
-controls.update();
+// ── Simulation time (days since J2000) ────────────────────────────────────────
+let simTime = 0;   // starts at J2000 epoch by default
 
-// ── Label projection helper ───────────────────────────────────────────────────
-const _v  = new THREE.Vector3();
+function setRandomStart() {
+    simTime = Math.random() * 365 * 50;   // random point in 50-year window
+    document.getElementById('btn-random').classList.add('active');
+    document.getElementById('btn-today').classList.remove('active');
+}
+
+function setTodayStart() {
+    simTime = dateToJ2000(new Date());
+    document.getElementById('btn-today').classList.add('active');
+    document.getElementById('btn-random').classList.remove('active');
+}
+
+// Default: random start
+setRandomStart();
+
+// ── Speed control ─────────────────────────────────────────────────────────────
+const speedSlider = document.getElementById('speed-slider');
+const speedVal    = document.getElementById('speed-val');
+speedSlider.addEventListener('input', () => {
+    speedVal.textContent = speedSlider.value + ' days/s';
+});
+
+// ── Date display ──────────────────────────────────────────────────────────────
+const dateDisplay = document.getElementById('date-display');
+const DATE_OPTS   = { year:'numeric', month:'short', day:'numeric' };
+
+// ── Label projection ──────────────────────────────────────────────────────────
+const _v = new THREE.Vector3();
 function projectLabel(mesh, label) {
     _v.setFromMatrixPosition(mesh.matrixWorld);
     _v.project(camera);
     const x = ( _v.x * 0.5 + 0.5) * innerWidth;
     const y = (-_v.y * 0.5 + 0.5) * innerHeight;
-    label.style.left = x + 'px';
-    label.style.top  = y + 'px';
+    label.style.left    = x + 'px';
+    label.style.top     = y + 'px';
     label.style.display = (_v.z < 1) ? 'block' : 'none';
 }
 
+// ── Camera ────────────────────────────────────────────────────────────────────
+camera.position.set(0, 120, 260);
+controls.update();
+
 // ── Animation loop ────────────────────────────────────────────────────────────
-const SPEED = 0.008; // adjust to taste — higher = faster orbits
+let lastTime = performance.now();
 
 function animate() {
     requestAnimationFrame(animate);
 
+    const now     = performance.now();
+    const deltaSec= (now - lastTime) / 1000;
+    lastTime      = now;
+
+    const daysPerSec = parseFloat(speedSlider.value);
+    simTime += daysPerSec * deltaSec;
+
+    // Update planet positions from orbital elements
     planetObjects.forEach(p => {
-        // Angular speed inversely proportional to orbital period (Kepler)
-        p.angle += SPEED / p.period;
-        p.pivot.rotation.y = p.angle;
+        p.pivot.rotation.y = planetAngle(p.name, simTime);
         p.mesh.rotation.y += 0.01;
         projectLabel(p.mesh, p.label);
     });
+
+    // Update date display
+    const simDate = j2000ToDate(simTime);
+    dateDisplay.textContent = simDate.toLocaleDateString('en-GB', DATE_OPTS);
 
     sun.rotation.y += 0.001;
     controls.update();
@@ -211,6 +323,7 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
 });
+
 </script>
 </body>
 </html>
